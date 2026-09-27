@@ -66,10 +66,21 @@ jobs:
       # Actions log, so we get a downloadable file without building twice.
       # `set -o pipefail` makes sure the step still fails/succeeds based on
       # buildozer's exit code, not tee's.
+      #
+      # Fix #6: `yes` reliably dies with SIGPIPE (non-zero exit) once
+      # buildozer stops reading stdin, even on a fully successful build.
+      # With `pipefail`, that non-zero exit propagates and fails the step
+      # even though buildozer and tee both succeeded — this bit us on a
+      # run where the APK built fine but the step still reported failure.
+      # `yes` is only there to auto-accept license prompts and its exit
+      # code is meaningless, so mask it with `|| true` and rely on
+      # PIPESTATUS to check buildozer's real exit code explicitly.
       - name: Build APK (debug)
+        shell: bash
         run: |
           set -o pipefail
-          yes | buildozer -v android debug 2>&1 | tee build.log
+          (yes || true) | buildozer -v android debug 2>&1 | tee build.log
+          exit ${PIPESTATUS[1]}
 
       - name: Locate built APK
         id: find_apk
