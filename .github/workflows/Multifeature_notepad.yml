@@ -61,18 +61,36 @@ jobs:
 
       # Fix #5: auto-accept the Android SDK license prompts, or the first
       # build on a fresh runner hangs waiting for interactive input.
+      #
+      # `tee` writes everything to build.log AND still shows it live in the
+      # Actions log, so we get a downloadable file without building twice.
+      # `set -o pipefail` makes sure the step still fails/succeeds based on
+      # buildozer's exit code, not tee's.
       - name: Build APK (debug)
         run: |
-          yes | buildozer -v android debug
+          set -o pipefail
+          yes | buildozer -v android debug 2>&1 | tee build.log
 
       - name: Locate built APK
         id: find_apk
+        if: always()
         run: |
-          APK_PATH=$(find bin -name "*.apk" | head -n 1)
+          APK_PATH=$(find bin -name "*.apk" 2>/dev/null | head -n 1)
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
           echo "Found APK: $APK_PATH"
 
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            build.log
+            .buildozer/**/logs/*
+          if-no-files-found: warn
+
       - name: Upload APK artifact
+        if: steps.find_apk.outputs.apk_path != ''
         uses: actions/upload-artifact@v4
         with:
           name: latex-notepad-apk
